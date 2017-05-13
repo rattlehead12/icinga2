@@ -147,8 +147,8 @@ include_directories(
 set(CMAKE_MACOSX_RPATH 1)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments -g")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -g")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments -g -lpthread")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -g -lpthread")
 endif()
 
 if(CMAKE_C_COMPILER_ID STREQUAL "SunPro")
