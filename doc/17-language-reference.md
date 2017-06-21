@@ -387,6 +387,9 @@ EventEngine         |**Read-write.** The name of the socket event engine, can be
 AttachDebugger      |**Read-write.** Whether to attach a debugger when Icinga 2 crashes. Defaults to false.
 RunAsUser           |**Read-write.** Defines the user the Icinga 2 daemon is running as. Used in the `init.conf` configuration file.
 RunAsGroup          |**Read-write.** Defines the group the Icinga 2 daemon is running as. Used in the `init.conf` configuration file.
+RLimitFiles         |**Read-write.** Defines the resource limit for RLIMIT_NOFILE that should be set at start-up. Used in the `init.conf` configuration file.
+RLimitProcesses     |**Read-write.** Defines the resource limit for RLIMIT_NPROC that should be set at start-up. Used in the `init.conf` configuration file.
+RLimitStack         |**Read-write.** Defines the resource limit for RLIMIT_STACK that should be set at start-up. Used in the `init.conf` configuration file.
 PlatformName        |**Read-only.** The name of the operating system, e.g. "Ubuntu".
 PlatformVersion     |**Read-only.** The version of the operating system, e.g. "14.04.3 LTS".
 PlatformKernel      |**Read-only.** The name of the operating system kernel, e.g. "Linux".
