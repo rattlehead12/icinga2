@@ -30,11 +30,11 @@
 #include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/stdiostream.hpp"
-#include "base/perfdatavalue.hpp"
 #include "base/application.hpp"
 #include "base/context.hpp"
 #include "base/statsfunction.hpp"
 #include "base/exception.hpp"
+#include "base/dynamic_threadpool.hpp"
 #include <fstream>
 
 using namespace icinga;
@@ -47,6 +47,8 @@ ApiListener::Ptr ApiListener::m_Instance;
 REGISTER_STATSFUNCTION(ApiListener, &ApiListener::StatsFunc);
 
 REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
+
+DynamicThreadPool l_DynamicThreadPool;
 
 ApiListener::ApiListener(void)
 	: m_SyncQueue(0, 4), m_LogMessageCount(0)
@@ -264,8 +266,7 @@ void ApiListener::ListenerThreadProc(const Socket::Ptr& server)
 	for (;;) {
 		try {
 			Socket::Ptr client = server->Accept();
-			boost::thread thread(boost::bind(&ApiListener::NewClientHandler, this, client, String(), RoleServer));
-			thread.detach();
+			l_DynamicThreadPool.Post(boost::bind(&ApiListener::NewClientHandler, this, client, String(), RoleServer));
 		} catch (const std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot accept new connection.");
 		}
@@ -293,7 +294,7 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 	String host = endpoint->GetHost();
 	String port = endpoint->GetPort();
 
-	Log(LogInformation, "ApiListener")
+	Log(LogInformation, "JsonRpcConnection")
 	    << "Reconnecting to API endpoint '" << endpoint->GetName() << "' via host '" << host << "' and port '" << port << "'";
 
 	TcpSocket::Ptr client = new TcpSocket();
@@ -629,8 +630,7 @@ void ApiListener::ApiReconnectTimerHandler(void)
 				continue;
 			}
 
-			boost::thread thread(boost::bind(&ApiListener::AddConnection, this, endpoint));
-			thread.detach();
+			l_DynamicThreadPool.Post(boost::bind(&ApiListener::AddConnection, this, endpoint));
 		}
 	}
 
@@ -1069,7 +1069,7 @@ void ApiListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& per
 
 	ObjectLock olock(stats.second);
 	for (const Dictionary::Pair& kv : stats.second)
-		perfdata->Add(new PerfdataValue("api_" + kv.first, kv.second));
+		perfdata->Add("'api_" + kv.first + "'=" + Convert::ToString(kv.second));
 
 	status->Set("api", stats.first);
 }
@@ -1153,49 +1153,9 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 
 	status->Set("zones", connectedZones);
 
-	/* connection stats */
-	size_t jsonRpcClients = GetAnonymousClients().size();
-	size_t httpClients = GetHttpClients().size();
-	size_t workQueueItems = JsonRpcConnection::GetWorkQueueLength();
-	size_t workQueueCount = JsonRpcConnection::GetWorkQueueCount();
-	size_t syncQueueItems = m_SyncQueue.GetLength();
-	size_t relayQueueItems = m_RelayQueue.GetLength();
-	double workQueueItemRate = JsonRpcConnection::GetWorkQueueRate();
-	double syncQueueItemRate = m_SyncQueue.GetTaskCount(60) / 60.0;
-	double relayQueueItemRate = m_RelayQueue.GetTaskCount(60) / 60.0;
-
-	Dictionary::Ptr jsonRpc = new Dictionary();
-	jsonRpc->Set("clients", jsonRpcClients);
-	jsonRpc->Set("work_queue_items", workQueueItems);
-	jsonRpc->Set("work_queue_count", workQueueCount);
-	jsonRpc->Set("sync_queue_items", syncQueueItems);
-	jsonRpc->Set("relay_queue_items", relayQueueItems);
-
-	jsonRpc->Set("work_queue_item_rate", workQueueItemRate);
-	jsonRpc->Set("sync_queue_item_rate", syncQueueItemRate);
-	jsonRpc->Set("relay_queue_item_rate", relayQueueItemRate);
-
-	Dictionary::Ptr http = new Dictionary();
-	http->Set("clients", httpClients);
-
-	status->Set("json_rpc", jsonRpc);
-	status->Set("http", http);
-
-	/* performance data */
 	perfdata->Set("num_endpoints", allEndpoints);
 	perfdata->Set("num_conn_endpoints", Convert::ToDouble(allConnectedEndpoints->GetLength()));
 	perfdata->Set("num_not_conn_endpoints", Convert::ToDouble(allNotConnectedEndpoints->GetLength()));
-
-	perfdata->Set("num_json_rpc_clients", jsonRpcClients);
-	perfdata->Set("num_http_clients", httpClients);
-	perfdata->Set("num_json_rpc_work_queue_items", workQueueItems);
-	perfdata->Set("num_json_rpc_work_queue_count", workQueueCount);
-	perfdata->Set("num_json_rpc_sync_queue_items", syncQueueItems);
-	perfdata->Set("num_json_rpc_relay_queue_items", relayQueueItems);
-
-	perfdata->Set("num_json_rpc_work_queue_item_rate", workQueueItemRate);
-	perfdata->Set("num_json_rpc_sync_queue_item_rate", syncQueueItemRate);
-	perfdata->Set("num_json_rpc_relay_queue_item_rate", relayQueueItemRate);
 
 	return std::make_pair(status, perfdata);
 }
@@ -1302,3 +1262,4 @@ String ApiListener::GetFromZoneName(const Zone::Ptr& fromZone)
 
 	return fromZoneName;
 }
+
